@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Document</title>
+        <link href="style.css" rel="stylesheet" />
+    </head>
+    <body>
+        <div class="title-part">Register for UBGChat</div>
+        <form action="/check-ubg-domain" method="POST" class="step step-1">
+            <div class="text">
+                Please input your UBG domain below.<br />
+                <input
+                    type="url"
+                    placeholder="https://example.com"
+                    class="input-domain"
+                />
+                
+            </div>
+        </form>
+        <div class="step step-2">
+            <div class="text">
+                Please add a TXT record to your domain named
+                <code>_ubgchat.<span id="domain"></span></code> with just the value set as
+                your specified username.<br />
+                <!-- TODO: Make a functioning password system? My idea of hashing should NOT be done and will cause security vulnerabilities. -->
+                <!-- Actually, it's apparently just when you store them publicly :) -->
+                Please click the button below when you have done so:<br />
+                <button type="button" onclick="checkTXTRecord()">
+                    Check for TXT Record</button
+                ><br />
+                Alternatively, you can use a file instead:<br />
+                <button type="button" onclick="switchStep('2a')">
+                    Use File
+                </button>
+                <span class="step-2-error" style="color:red;"></span>
+            </div>
+        </div>
+        <div class="step step-2a">
+            <!-- Use a file instead of a TXT record -->
+            <div class="text">
+                Please add a file to your domain called
+                <code>/.well-known/ubgchat</code> to your public directory with just
+                your specified username in the file.<br />
+                Please click the button below when you have done so:<br />
+                <button type="button" onclick="check_file()">
+                    Check for File</button
+                ><br />
+                Alternatively, you can use a TXT record instead:<br />
+                <button type="button" onclick="switchStep('2')">
+                    Use TXT Record
+                </button>
+                <span class="step-2a-error" style="color:red;"></span>
+            </div>
+        </div>
+        <script>
+            let domainName = "";
+            function switchStep(stepNum) {
+                document
+                    .querySelectorAll(`.step:not(.step-${stepNum})`)
+                    .forEach(function (e) {
+                        e.style.display = "none";
+                    });
+                document.querySelector(`.step-${stepNum}`).style.display =
+                    "block";
+            }
+            switchStep(1);
+            // Step 1 to check if the UBG domain exists (Just checks A records!)
+            document
+                .querySelector(".step-1")
+                .addEventListener("submit", function (event) {
+                    event.preventDefault();
+                    const domainInput = document.querySelector(".input-domain");
+                    const domain = domainInput.value.trim();
+                    if (domain) {
+                        fetch("/check-ubg-domain", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({ domain }),
+                        })
+                            .then((response) => response)
+                            .then((data) => {
+                                if (data.status != 200) {
+                                    alert("Not a valid domain! Try again.");
+                                } else {
+                                    switchStep(2);
+                                    domainName = new URL(domain).hostname;
+                                    document
+                                        .querySelectorAll("#domain")
+                                        .forEach(function (e) {
+                                            e.innerText = domainName;
+                                        });
+                                }
+                            });
+                    } else {
+                        alert("Please enter a valid UBG domain.");
+                    }
+                });
+            async function checkTXTRecord(){
+                let res = await fetch("/check-txt-record",{
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({domainName})
+                })
+                let txt = await res.text();
+                if(res.status != 200){
+                    document.querySelector(".step-2-error").innerText = txt;
+                }else{
+                    alert("Looks GREAT! Your username should be "+txt+"!!!")
+                }
+            }
+        </script>
+    </body>
+</html>

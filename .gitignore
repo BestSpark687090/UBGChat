@@ -1,1 +1,3 @@
 node_modules/**
+# CONTAINS HASHED USER PASSWORDS. DO NOT COMMIT. EVER.
+users.json
