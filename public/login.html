@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>UBGChat - Login</title>
+        <link rel="stylesheet" href="style.css" />
+    </head>
+    <body>
+        <div class="title-part">Login to UBGChat</div>
+        <div class="text">
+            <label for="username">Username:</label>
+            <input type="text" name="username" id="username" /><br />
+            <label for="password">Password:</label>
+            <input type="password" name="password" id="password" /><br />
+            <button type="button" onclick="login()">Login!</button><br />
+            <span class="error"></span>
+        </div>
+        <script>
+            async function login() {
+                const username = document.querySelector("#username").value;
+                const password = document.querySelector("#password").value;
+                if (!password||!username) {
+                    document.querySelector(".error").innerText =
+                        "Please enter a username and password.";
+                    return;
+                }
+                let res = await fetch("/login", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ username, password }),
+                });
+                let txt = await res.text();
+                if (res.status != 200) {
+                    document.querySelector(".error").innerText = txt;
+                } else {
+                    alert("Logged in! " + txt);
+                }
+            }
+        </script>
+    </body>
+</html>

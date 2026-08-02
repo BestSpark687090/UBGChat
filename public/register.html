@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Document</title>
+        <title>UBGChat - Register</title>
         <link href="style.css" rel="stylesheet" />
     </head>
     <body>
@@ -16,6 +16,7 @@
                     placeholder="https://example.com"
                     class="input-domain"
                 />
+                <button type="submit">Submit</button>
                 
             </div>
         </form>
@@ -44,7 +45,7 @@
                 <code>/.well-known/ubgchat</code> to your public directory with just
                 your specified username in the file.<br />
                 Please click the button below when you have done so:<br />
-                <button type="button" onclick="check_file()">
+                <button type="button" onclick="checkFile()">
                     Check for File</button
                 ><br />
                 Alternatively, you can use a TXT record instead:<br />
@@ -54,8 +55,19 @@
                 <span class="step-2a-error" style="color:red;"></span>
             </div>
         </div>
+        <div class="step step-3">
+            <div class="text">
+            Welcome to UBGChat <span id="username"></span>!<br>
+            Last thing, what password do you want?<br>
+            I recommend making it simple, but not <b>too</b> simple that somebody can guess it.<br>
+            <input type="password" id="password">
+            <button type="button" onclick="register()">Register</button><br>
+            <span class="step-3-error" style="color:red;"></span>
+            </div>
+        </div>
         <script>
             let domainName = "";
+            let username = "";
             function switchStep(stepNum) {
                 document
                     .querySelectorAll(`.step:not(.step-${stepNum})`)
@@ -111,7 +123,46 @@
                 if(res.status != 200){
                     document.querySelector(".step-2-error").innerText = txt;
                 }else{
-                    alert("Looks GREAT! Your username should be "+txt+"!!!")
+                    username = txt;
+                    document.querySelector("#username").innerText = username;
+                    switchStep(3);
+                }
+            }
+            async function checkFile(){
+                let res = await fetch("/check-file",{
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({domainName})
+                })
+                let txt = await res.text();
+                if(res.status != 200){
+                    document.querySelector(".step-2-error").innerText = txt;
+                }else{
+                    username = txt;
+                    document.querySelector("#username").innerText = username;
+                    switchStep(3);
+                }
+            }
+            async function register(){
+                const password = document.querySelector("#password").value;
+                if(!password){
+                    document.querySelector(".step-3-error").innerText = "Please enter a password.";
+                    return;
+                }
+                let res = await fetch("/register",{
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({domainName, username, password})
+                })
+                let txt = await res.text();
+                if(res.status != 200){
+                    document.querySelector(".step-3-error").innerText = txt;
+                }else{
+                    alert("Registered! "+txt);
                 }
             }
         </script>
