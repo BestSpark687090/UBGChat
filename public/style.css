@@ -1,0 +1,294 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans&display=swap");
+
+:root {
+  --background: black;
+  --color: white;
+  --color-2: #aa0000;
+  --height: 20vh;
+  --radial-gradient-to-keep-in-mind: radial-gradient(
+    circle,
+    var(--background),
+    var(--background),
+    var(--color-2),
+    var(--color-2)
+  );
+  --radial-gradient: radial-gradient(circle, var(--background), var(--color-2));
+  --linear-gradient: linear-gradient(180deg, var(--color-2), var(--background));
+  color-scheme: dark;
+}
+
+@font-face {
+  font-family: "ROT13";
+  src:
+    url("rot13.woff2") format("woff2"),
+    url("rot13.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+rot13,
+rot13ns {
+  font-family: "ROT13", "IBM Plex Sans", sans-serif;
+}
+
+/* rot13-ns = no space */
+
+rot13::before {
+  content: "\00A0";
+  /* non-breaking space- aka nbsp */
+}
+
+rot13::after {
+  content: "\00A0";
+}
+
+* {
+  line-height: 1.3em;
+}
+
+br {
+  height: 200%;
+}
+
+html {
+  height: 100%;
+  width: 100%;
+  background-color: var(--background);
+  color: var(--color);
+  font-family: "IBM Plex Sans", sans-serif;
+  font-weight: 400;
+  color-scheme: light dark;
+}
+
+/* @media screen and (max-width: 1000px) {
+  .title-part {
+    font-size: calc(1em + 4vw) !important;
+  }
+} */
+
+@media screen and (min-width: 950px) {
+  /* align images to right side instead*/
+  .images {
+    flex-direction: row !important;
+    justify-content: flex-end !important;
+  }
+
+  .image-inner {
+    /* width: 5vh !important; */
+    height: fit-content;
+  }
+}
+
+.title-part {
+  display: flex;
+  font-size: 3.68709rem;
+  /* haha 687090 like the name */
+  /* font-size: calc(4vw - 20%); */
+  background: var(--linear-gradient);
+  color: var(--color);
+  align-items: center;
+  justify-content: center;
+  height: var(--height);
+  border-radius: 10px;
+  text-align: center;
+}
+
+.text {
+  text-align: center;
+  align-items: center;
+}
+
+ul,
+ol,
+li {
+  /* list-style-position: inside; */
+  list-style-type: none;
+  align-items: center;
+  text-align: center;
+}
+
+.gradient {
+  display: flex;
+  border-radius: 10px;
+  background: var(--radial-gradient);
+  /* height: var(--height); */
+  align-items: center;
+  justify-content: center;
+  align-content: center;
+  text-align: center;
+  flex-direction: column;
+  /* object-fit: cover; */
+  padding: 20px;
+}
+
+.games,
+.proxies {
+  display: grid;
+  /* Creates two equal-width columns */
+  /* grid-template-columns: 1fr 1fr 1fr; */
+  width: 100%;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 15px;
+  justify-content: center;
+  /* Adds space between grid cells */
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+}
+
+.flex {
+  display: flex;
+  flex-direction: column;
+}
+
+.images {
+  border-radius: 10px;
+  background: var(--radial-gradient);
+  /* object-fit: cover; */
+  padding: 20px;
+  /* overflow: scroll; */
+}
+
+.image-inner > img {
+  border: 2px solid var(--color);
+  background-color: var(--color-2);
+  width: 20vh;
+}
+
+.subtext {
+  font-size: 75%;
+  color: gray;
+  /* text-decoration: none !important; */
+}
+
+.subtext b {
+  font-size: 110%;
+  /* 85% total, because font size is kinda relative */
+}
+
+a {
+  color: var(--color);
+  font-weight: bold;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  width: auto;
+  height: auto;
+  margin: auto;
+  /* width: 33%; */
+  /* height: 2vh; */
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+}
+
+.terms {
+  border-radius: 10px;
+  background: radial-gradient(circle, var(--background), var(--color-2));
+  padding: 20px;
+}
+
+.hidelink {
+  text-decoration: none !important;
+  font-weight: unset;
+  color: inherit;
+}
+
+.blocked {
+  color: red !important;
+}
+
+.unblocked {
+  color: green !important;
+}
+
+.latestCommitMessage {
+  background: radial-gradient(circle, rgb(25, 25, 25), var(--color-2));
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  justify-content: center;
+  align-content: center;
+  display: flex;
+  border-radius: 10px;
+  flex-wrap: wrap;
+  height: 2.5em;
+  /* This won't look right on the in-editor preview, but I don't care.
+Just open it in a new tab. */
+}
+
+.partners {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.partners > span::before {
+  content: "* ";
+  color: var(--color-2);
+}
+
+.discord {
+  display: flex;
+  flex-direction: row;
+  align-items: space-between;
+}
+
+.discord > i {
+  padding: 10px;
+}
+
+.text,
+.gradient {
+  font-size: 110%;
+}
+
+/* iframe {
+  opacity: 0.00000000001;
+} */
+
+p {
+  margin: 0;
+}
+
+.tab-list {
+  display: flex;
+  align-items: center;
+  justify-content: space-evenly;
+  width: 85vw;
+  justify-self: center;
+}
+.tab-list > button {
+  background: black;
+  border: 5px solid var(--color-2);
+  border-radius: 25px;
+  font-size: 1.5rem;
+  padding: 0px 10px;
+  width: stretch;
+  /* doesnt look good in preview. oh well. */
+}
+.tab-list > button:hover {
+  background: revert;
+  /* color: var(--background); */
+}
+.tab-list > button.active {
+  background: #dd0000;
+  /* background-color: / */
+}
+.start-hidden {
+  display: none;
+}
+a > rot13ns {
+  text-decoration: underline;
+}
