@@ -1,3 +1,5 @@
 node_modules/**
 # CONTAINS HASHED USER PASSWORDS. DO NOT COMMIT. EVER.
 users.json
+# Why would I git commit the chat?
+chat.db
