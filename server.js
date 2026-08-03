@@ -16,7 +16,7 @@ const scryptAsync = promisify(scrypt);
 const USERS_FILE = join(import.meta.dirname, "users.json");
 const ADMIN_USERNAME = "BestSpark687090";
 
-// token -> username. In-memory only, resets on restart (so does everyone's login).
+// token -> user data. In-memory only, resets on restart (so does everyone's login).
 const sessions = new Map();
 
 function parseCookies(header) {
@@ -32,8 +32,9 @@ function parseCookies(header) {
     return out;
 }
 
-function getSessionUsername(req) {
+function getSessionUserData(req) {
     const token = parseCookies(req.headers.cookie).session;
+    // console.log(sessions.get(token))
     return token ? sessions.get(token) : undefined;
 }
 
@@ -111,14 +112,20 @@ await db.exec(`
       client_offset TEXT UNIQUE,
       username TEXT,
       content TEXT,
-      sent_at TEXT
+      sent_at TEXT,
+      domain_name TEXT
     );
   `);
-// in case this is an existing db from before sent_at existed
-try {
-    await db.exec(`ALTER TABLE messages ADD COLUMN sent_at TEXT`);
-} catch (e) {
-    // already has the column, fine
+// in case this is an existing db from before these columns existed
+for (const migration of [
+    "ALTER TABLE messages ADD COLUMN sent_at TEXT",
+    "ALTER TABLE messages ADD COLUMN domain_name TEXT",
+]) {
+    try {
+        await db.exec(migration);
+    } catch (e) {
+        // already has the column, fine
+    }
 }
 // #endregion db setup
 
@@ -135,11 +142,14 @@ const io = new Server(fastify.server, {
 // Socket connections authenticate via the same session cookie /me uses,
 // so the client can't just claim to be anyone by passing a username along.
 io.use((socket, next) => {
-    const username = getSessionUsername({ headers: socket.handshake.headers });
-    if (!username) {
+    const data = getSessionUserData({ headers: socket.handshake.headers });
+    // const username = data.username;
+    if (!data) {
         return next(new Error("Not logged in."));
     }
+    const username = data.username;
     socket.username = username;
+    socket.domain = data.domainName;
     next();
 });
 fastify.get("/ping", async (req, res) => {
@@ -184,8 +194,13 @@ fastify.post("/login", async (req, res) => {
     if (!user || !(await verifyPassword(password, user.password))) {
         return res.code(401).send("Invalid username or password.");
     }
+    user.password = "you thought lol"
+    const data = {
+        username,
+        ...user
+    }
     const token = randomBytes(32).toString("hex");
-    sessions.set(token, username);
+    sessions.set(token, data);
     res.header(
         "Set-Cookie",
         `session=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=604800`,
@@ -194,11 +209,11 @@ fastify.post("/login", async (req, res) => {
 });
 // and this too
 fastify.get("/me", async (req, res) => {
-    const username = getSessionUsername(req);
-    if (!username) {
+    const userData = getSessionUserData(req);
+    if (!userData) {
         return res.code(401).send("Not logged in.");
     }
-    return res.code(200).send(username);
+    return res.code(200).send(userData);
 });
 
 // The username goes back to the client to be placed into /register later btw :)
@@ -228,6 +243,9 @@ fastify.post("/check-file", async (req, res) => {
         );
         const txt = await resp.text();
         // console.log(txt);
+        if(!resp.ok){
+            return res.code(404).send("Looks like I got a bad status code! Got a " + resp.statusCode + " at check time.")
+        }
         if (txt.trim() != "") {
             return res.code(200).send(txt.trim());
         } else {
@@ -241,7 +259,7 @@ fastify.post("/check-file", async (req, res) => {
             .code(404)
             .send(
                 "Domain doesn't seem to be active. Weird. I got a " +
-                    res.statusCode +
+                    resp.statusCode +
                     " when trying to use.",
             );
     }
@@ -251,15 +269,17 @@ io.on("connection", async (socket) => {
     // Events go in here!
     socket.on("chat", async (msg, clientOffset, callback) => {
         const username = socket.username;
+        const domainName = socket.domain;
         const sentAt = new Date().toISOString();
         let result;
         try {
             result = await db.run(
-                "INSERT INTO messages (content, client_offset, username, sent_at) VALUES (?, ?, ?, ?)",
+                "INSERT INTO messages (content, client_offset, username, sent_at, domain_name) VALUES (?, ?, ?, ?, ?)",
                 msg,
                 clientOffset,
                 username,
                 sentAt,
+                domainName,
             );
         } catch (e) {
             if (e.errno === 19 /* SQLITE_CONSTRAINT */) {
@@ -270,10 +290,10 @@ io.on("connection", async (socket) => {
             }
             return;
         }
-        io.emit("chat", msg, result.lastID, username, sentAt);
+        io.emit("chat", msg, result.lastID, {username, domainName}, sentAt);
         if (callback) callback();
     });
-    socket.on("delete", async (clientOffset) => {
+    socket.on("delete", async (clientOffset, callback) => {
         const username = socket.username;
         const isAdmin = username === ADMIN_USERNAME;
         try {
@@ -286,6 +306,7 @@ io.on("connection", async (socket) => {
                       username,
                   );
             if (!check) {
+                if (callback) callback();
                 return;
             }
             if (isAdmin) {
@@ -298,17 +319,30 @@ io.on("connection", async (socket) => {
                 );
             }
             io.emit("delete", clientOffset);
+            if (callback) callback();
         } catch (e) {
-            console.log(e);
+            if (e.errno === 19 /* SQLITE_CONSTRAINT */) {
+                if (callback) callback();
+            } else {
+                console.log(e);
+                // nothing to do, just let the client retry
+            }
+            return;
         }
     });
     if (!socket.recovered) {
       try {
         await db.each(
-          "SELECT id, content, username, sent_at FROM messages WHERE id > ?",
+          "SELECT id, content, username, sent_at, domain_name FROM messages WHERE id > ?",
           [socket.handshake.auth.serverOffset || 0],
           (_err, row) => {
-            socket.emit("chat", row.content, row.id, row.username, row.sent_at);
+            socket.emit(
+              "chat",
+              row.content,
+              row.id,
+              { username: row.username, domainName: row.domain_name },
+              row.sent_at,
+            );
           }
         );
       } catch (e) {
