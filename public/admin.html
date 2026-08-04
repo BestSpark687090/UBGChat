@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>UBGChat - Admin Panel</title>
+    </head>
+    <body>
+        <script type="module">
+            const meRes = await fetch("/is-admin");
+            if (meRes.status !== 200) {
+                alert("You aren't me bro...")
+                window.location.href = "/";
+            }
+        </script>
+    </body>
+</html>

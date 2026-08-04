@@ -11,6 +11,7 @@ import { Server } from "socket.io";
 // Written by AI because IDK how to do hashing... also it's 11:58 at night while I write this.
 import { randomBytes, scrypt, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+// import { req } from "pino-std-serializers";
 const scryptAsync = promisify(scrypt);
 
 const USERS_FILE = join(import.meta.dirname, "users.json");
@@ -215,7 +216,18 @@ fastify.get("/me", async (req, res) => {
     }
     return res.code(200).send(userData);
 });
-
+// ok this one i wrote myself
+fastify.get("/is-admin", async(req,res)=>{
+    const userData = getSessionUserData(req);
+    // console.log(userData)
+    if(!userData){
+        return res.code(401).send("You aren't logged in.")
+    }
+    if (userData.username != ADMIN_USERNAME){
+        return res.code(401).send("You aren't me.")
+    }
+    return res.code(200).send("Is admin!")
+})
 // The username goes back to the client to be placed into /register later btw :)
 fastify.post("/check-txt-record", async (req, res) => {
     try {
