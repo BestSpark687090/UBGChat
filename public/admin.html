@@ -4,13 +4,34 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>UBGChat - Admin Panel</title>
+        <link rel="stylesheet" href="style.css" />
     </head>
     <body>
         <script type="module">
             const meRes = await fetch("/is-admin");
             if (meRes.status !== 200) {
-                alert("You aren't me bro...")
+                alert("You aren't me bro...");
                 window.location.href = "/";
+            }
+        </script>
+        <div class="title-part">UBGChat Admin Panel</div>
+        <div class="text">
+            This should only show up if you're me... hopefully.<br />
+            Either way i'm gonna try to protect the API anyways just to be
+            safe<br />
+            alr heres the buttons you want<br />
+            <button type="button" onclick="submitAdmin('deleteAll')">
+                Delete All Messages
+            </button>
+        </div>
+        <script>
+            async function submitAdmin(type) {
+                let res = await fetch("/admin-api/" + type, {
+                    method: "POST",
+                });
+                if (res.ok) {
+                    alert(`${type} succeeded!`);
+                }
             }
         </script>
     </body>

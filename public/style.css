@@ -303,11 +303,15 @@ a>rot13ns {
 
 .message {
     padding-left: 10px;
+    text-align:left;
 }
 
 /* #messages{ */
 /* width: 100%; */
 /* } */
+#messages{
+    width: 50%;
+}
 .timestamp {
     padding-left: 5px;
 }

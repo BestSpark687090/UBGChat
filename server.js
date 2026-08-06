@@ -5,12 +5,19 @@ import { readFile, writeFile } from "fs/promises";
 import sqlite3 from "sqlite3";
 import { open } from "sqlite";
 import { Server } from "socket.io";
+// markdown thingy
+import { marked } from "marked";
+//html encoder
+import { decode } from "html-entities";
+import DOMPurify from "isomorphic-dompurify";
+
 
 // #region ai registration section
 
 // Written by AI because IDK how to do hashing... also it's 11:58 at night while I write this.
 import { randomBytes, scrypt, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+// import { req } from "pino-std-serializers"; dude i genuinely hate this thing WHY DOES IT EXIST
 // import { req } from "pino-std-serializers";
 const scryptAsync = promisify(scrypt);
 
@@ -195,11 +202,11 @@ fastify.post("/login", async (req, res) => {
     if (!user || !(await verifyPassword(password, user.password))) {
         return res.code(401).send("Invalid username or password.");
     }
-    user.password = "you thought lol"
+    user.password = "you thought lol";
     const data = {
         username,
-        ...user
-    }
+        ...user,
+    };
     const token = randomBytes(32).toString("hex");
     sessions.set(token, data);
     res.header(
@@ -217,17 +224,17 @@ fastify.get("/me", async (req, res) => {
     return res.code(200).send(userData);
 });
 // ok this one i wrote myself
-fastify.get("/is-admin", async(req,res)=>{
+fastify.get("/is-admin", async (req, res) => {
     const userData = getSessionUserData(req);
     // console.log(userData)
-    if(!userData){
-        return res.code(401).send("You aren't logged in.")
+    if (!userData) {
+        return res.code(401).send("You aren't logged in.");
     }
-    if (userData.username != ADMIN_USERNAME){
-        return res.code(401).send("You aren't me.")
+    if (userData.username != ADMIN_USERNAME) {
+        return res.code(401).send("You aren't me.");
     }
-    return res.code(200).send("Is admin!")
-})
+    return res.code(200).send("Is admin!");
+});
 // The username goes back to the client to be placed into /register later btw :)
 fastify.post("/check-txt-record", async (req, res) => {
     try {
@@ -255,8 +262,14 @@ fastify.post("/check-file", async (req, res) => {
         );
         const txt = await resp.text();
         // console.log(txt);
-        if(!resp.ok){
-            return res.code(404).send("Looks like I got a bad status code! Got a " + resp.statusCode + " at check time.")
+        if (!resp.ok) {
+            return res
+                .code(404)
+                .send(
+                    "Looks like I got a bad status code! Got a " +
+                        resp.statusCode +
+                        " at check time.",
+                );
         }
         if (txt.trim() != "") {
             return res.code(200).send(txt.trim());
@@ -276,7 +289,32 @@ fastify.post("/check-file", async (req, res) => {
             );
     }
 });
-
+fastify.post("/admin-api/deleteAll", async (req, res) => {
+    const userData = getSessionUserData(req);
+    if (!userData) {
+        return res.code(401).send("You aren't logged in.");
+    }
+    if (userData.username !== ADMIN_USERNAME) {
+        return res.code(401).send("You aren't me.");
+    }
+    await db.run("DELETE FROM messages");
+    io.emit("delete-all");
+    return res.code(200).send("Deleted all messages.");
+});
+// dompurify by ai i guess- probably not the subtext thing im boutta write
+function renderMessage(rawText) {
+    let split = rawText.split("\n");
+    for(let i=0;i<split.length;i++){
+        let line = split[i];
+        if(line.startsWith("-#")){
+            line = line.slice(3);
+            line = `<span class="subtext">${line}</span>`
+        }
+        split[i] = line; // to be safe
+    }
+    rawText = split.join("\n") 
+    return DOMPurify.sanitize(marked.parse(rawText));
+}
 io.on("connection", async (socket) => {
     // Events go in here!
     socket.on("chat", async (msg, clientOffset, callback) => {
@@ -302,7 +340,13 @@ io.on("connection", async (socket) => {
             }
             return;
         }
-        io.emit("chat", msg, result.lastID, {username, domainName}, sentAt);
+        io.emit(
+            "chat",
+            renderMessage(msg),
+            result.lastID,
+            { username, domainName },
+            sentAt,
+        );
         if (callback) callback();
     });
     socket.on("delete", async (clientOffset, callback) => {
@@ -311,7 +355,10 @@ io.on("connection", async (socket) => {
         try {
             // admin can delete anything; everyone else only their own messages
             const check = isAdmin
-                ? await db.get("SELECT * FROM messages WHERE id = ?", clientOffset)
+                ? await db.get(
+                      "SELECT * FROM messages WHERE id = ?",
+                      clientOffset,
+                  )
                 : await db.get(
                       "SELECT * FROM messages WHERE id = ? AND username = ?",
                       clientOffset,
@@ -343,24 +390,27 @@ io.on("connection", async (socket) => {
         }
     });
     if (!socket.recovered) {
-      try {
-        await db.each(
-          "SELECT id, content, username, sent_at, domain_name FROM messages WHERE id > ?",
-          [socket.handshake.auth.serverOffset || 0],
-          (_err, row) => {
-            socket.emit(
-              "chat",
-              row.content,
-              row.id,
-              { username: row.username, domainName: row.domain_name },
-              row.sent_at,
+        try {
+            await db.each(
+                "SELECT id, content, username, sent_at, domain_name FROM messages WHERE id > ?",
+                [socket.handshake.auth.serverOffset || 0],
+                (_err, row) => {
+                    // decode() is a no-op on plain text; it's only here for
+                    // rows stored under the old encode()-before-insert scheme
+                    const content = renderMessage(decode(row.content));
+                    socket.emit(
+                        "chat",
+                        content,
+                        row.id,
+                        { username: row.username, domainName: row.domain_name },
+                        row.sent_at,
+                    );
+                },
             );
-          }
-        );
-      } catch (e) {
-        console.log(e);
-        // something went wrong
-      }
+        } catch (e) {
+            console.log(e);
+            // something went wrong
+        }
     }
 });
 
