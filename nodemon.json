@@ -1,0 +1,3 @@
+{
+  "ignore": ["users.json", "chat.db", "chat.db-journal", "chat.db-wal", "chat.db-shm"]
+}

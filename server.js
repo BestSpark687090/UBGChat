@@ -10,6 +10,7 @@ import { marked } from "marked";
 //html encoder
 import { decode } from "html-entities";
 import DOMPurify from "isomorphic-dompurify";
+import 'dotenv/config';
 
 
 // #region ai registration section
@@ -22,7 +23,7 @@ import { promisify } from "util";
 const scryptAsync = promisify(scrypt);
 
 const USERS_FILE = join(import.meta.dirname, "users.json");
-const ADMIN_USERNAME = "BestSpark687090";
+const OWNER_USERNAME = "BestSpark687090";
 
 // token -> user data. In-memory only, resets on restart (so does everyone's login).
 const sessions = new Map();
@@ -224,16 +225,16 @@ fastify.get("/me", async (req, res) => {
     return res.code(200).send(userData);
 });
 // ok this one i wrote myself
-fastify.get("/is-admin", async (req, res) => {
+fastify.get("/is-owner", async (req, res) => {
     const userData = getSessionUserData(req);
     // console.log(userData)
     if (!userData) {
         return res.code(401).send("You aren't logged in.");
     }
-    if (userData.username != ADMIN_USERNAME) {
+    if (userData.username != OWNER_USERNAME) {
         return res.code(401).send("You aren't me.");
     }
-    return res.code(200).send("Is admin!");
+    return res.code(200).send("Is owner!");
 });
 // The username goes back to the client to be placed into /register later btw :)
 fastify.post("/check-txt-record", async (req, res) => {
@@ -289,18 +290,74 @@ fastify.post("/check-file", async (req, res) => {
             );
     }
 });
-fastify.post("/admin-api/deleteAll", async (req, res) => {
+//#region owner api
+fastify.post("/owner-api/deleteAll", async (req, res) => {
     const userData = getSessionUserData(req);
     if (!userData) {
         return res.code(401).send("You aren't logged in.");
     }
-    if (userData.username !== ADMIN_USERNAME) {
+    if (userData.username !== OWNER_USERNAME) {
         return res.code(401).send("You aren't me.");
     }
     await db.run("DELETE FROM messages");
     io.emit("delete-all");
     return res.code(200).send("Deleted all messages.");
 });
+fastify.get('/owner-api/get-users', async(req,res)=>{
+    const userData = getSessionUserData(req);
+    if (!userData) {
+        return res.code(401).send("You aren't logged in.");
+    }
+    if (userData.username !== OWNER_USERNAME) {
+        return res.code(401).send("You aren't me.");
+    }
+    let users = await loadUsers();
+    for(let user in users){
+        // This is just here to make sure passwords aren't leaked :D
+        users[user].password = "nope.";
+    }
+    // makes sure the owner
+    users[OWNER_USERNAME]["owner"] = true;
+    res.send(JSON.stringify(users));
+})
+fastify.post("/owner-api/create-test-user",async(req,res)=>{
+    const userData = getSessionUserData(req);
+    if (!userData) {
+        return res.code(401).send("You aren't logged in.");
+    }
+    if (userData.username !== OWNER_USERNAME) {
+        return res.code(401).send("You aren't me.");
+    }
+    const username = req.params.username;
+    const users = await loadUsers();
+    if (users["_TESTUSER"]){
+        delete users["_TESTUSER"];
+        saveUsers(users);
+        return res.code(409).send("Test user already exists! Deleted.")
+    }
+    // actually im gonna put the password in the ENV- wait i dont have an env
+    // doof
+    users["_TESTUSER"] = {
+        domainName:"test.example.com",
+        password: await hashPassword(process.env.TESTUSER_PASSWORD) // Kinda stupid, but whatever.
+    }
+    saveUsers(users);
+    return res.code(200).send("Done!")
+})
+fastify.post("/owner-api/delete-test-user",async(req,res)=>{
+    const userData = getSessionUserData(req);
+    if (!userData) {
+        return res.code(401).send("You aren't logged in.");
+    }
+    if (userData.username !== OWNER_USERNAME) {
+        return res.code(401).send("You aren't me.");
+    }
+    const users = await loadUsers();
+    delete users["_TESTUSER"];
+    saveUsers(users)
+    return res.code(200).send("I dunno if it never existed before, but it doesn't now!")
+})
+//#endregion owner api
 // dompurify by ai i guess- probably not the subtext thing im boutta write
 function renderMessage(rawText) {
     let split = rawText.split("\n");
@@ -351,10 +408,10 @@ io.on("connection", async (socket) => {
     });
     socket.on("delete", async (clientOffset, callback) => {
         const username = socket.username;
-        const isAdmin = username === ADMIN_USERNAME;
+        const isowner = username === OWNER_USERNAME;
         try {
-            // admin can delete anything; everyone else only their own messages
-            const check = isAdmin
+            // owner can delete anything; everyone else only their own messages
+            const check = isowner
                 ? await db.get(
                       "SELECT * FROM messages WHERE id = ?",
                       clientOffset,
@@ -368,7 +425,7 @@ io.on("connection", async (socket) => {
                 if (callback) callback();
                 return;
             }
-            if (isAdmin) {
+            if (isowner) {
                 await db.run("DELETE FROM messages WHERE id = ?", clientOffset);
             } else {
                 await db.run(

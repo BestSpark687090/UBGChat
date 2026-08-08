@@ -328,3 +328,9 @@ a>rot13ns {
     top: 0;
     left: 0;
 }
+textarea{
+    height:auto;
+    field-sizing: content;
+    min-width: 40vw;
+    /* text-align: center; */
+}

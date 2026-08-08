@@ -3,3 +3,5 @@ node_modules/**
 users.json
 # Why would I git commit the chat?
 chat.db
+# ...
+.env
