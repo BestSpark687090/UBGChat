@@ -26,6 +26,13 @@ function resetOwns() {
     // actually now its outer to reset styling
     document.querySelector(".owns").outerHTML = storeForOwns;
 }
+async function checkIfLoggedIn() {
+    const res = await fetch("/me");
+    if (res.status != 200) {
+        // alert("You aren't me bro...");
+        window.location.href = "/login.html";
+    }
+}
 // Socket Stuff + login check i guess?
 let counter = 0;
 
@@ -46,9 +53,11 @@ const socket = io({
 const form = document.getElementById("messagebox");
 const input = document.getElementById("message");
 const messages = document.getElementById("messages");
-form.addEventListener("submit", (e) => {
+form.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (input.value) {
+        // check if logged in before typing to be safe
+        await checkIfLoggedIn()
         const clientOffset = `${socket.id}-${counter++}`;
         socket.emit("chat", input.value, clientOffset);
         input.value = "";
@@ -82,8 +91,8 @@ socket.on("chat", (msg, serverOffset, userData, sentAt) => {
         element.textContent = text;
         return element.innerHTML;
     }
-    msg = msg.replaceAll("\n","<br>")
-    msg = msg.slice(0,-4) // -4 to remove the last <br>
+    msg = msg.replaceAll("\n", "<br>");
+    msg = msg.slice(0, -4); // -4 to remove the last <br>
     // msg arrives already rendered + sanitized by the server (marked + DOMPurify) -
     // don't re-encode it, or the real HTML tags get turned back into visible text
     const username = htmlEncode(userData.username);

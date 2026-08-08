@@ -10,8 +10,7 @@ import { marked } from "marked";
 //html encoder
 import { decode } from "html-entities";
 import DOMPurify from "isomorphic-dompurify";
-import 'dotenv/config';
-
+import "dotenv/config";
 
 // #region ai registration section
 
@@ -45,6 +44,15 @@ function getSessionUserData(req) {
     const token = parseCookies(req.headers.cookie).session;
     // console.log(sessions.get(token))
     return token ? sessions.get(token) : undefined;
+}
+
+// written by ai soo uhhh
+function invalidateSessionsFor(username) {
+    for (const [token, data] of sessions) {
+        if (data.username === username) {
+            sessions.delete(token);
+        }
+    }
 }
 
 async function loadUsers() {
@@ -125,17 +133,6 @@ await db.exec(`
       domain_name TEXT
     );
   `);
-// in case this is an existing db from before these columns existed
-for (const migration of [
-    "ALTER TABLE messages ADD COLUMN sent_at TEXT",
-    "ALTER TABLE messages ADD COLUMN domain_name TEXT",
-]) {
-    try {
-        await db.exec(migration);
-    } catch (e) {
-        // already has the column, fine
-    }
-}
 // #endregion db setup
 
 const fastify = Fastify({ forceCloseConnections: true, trustProxy: true });
@@ -291,85 +288,177 @@ fastify.post("/check-file", async (req, res) => {
     }
 });
 //#region owner api
-fastify.post("/owner-api/deleteAll", async (req, res) => {
+/**
+ * Use like this:
+ * ```js
+if (!checkIsOwner(req)) {
+    return returnResponse(req,res);
+}
+ * ```
+ */
+function checkIsOwner(req) {
+    const userData = getSessionUserData(req);
+    if (!userData) {
+        // return res.code(401).send("You aren't logged in.");
+        return false;
+    }
+    if (userData.username !== OWNER_USERNAME) {
+        // return res.code(401).send("You aren't me.");
+        return false;
+    }
+    return true; // is owner.
+}
+function returnResponse(req, res) {
     const userData = getSessionUserData(req);
     if (!userData) {
         return res.code(401).send("You aren't logged in.");
     }
     if (userData.username !== OWNER_USERNAME) {
         return res.code(401).send("You aren't me.");
+    }
+}
+async function removeUserMessages(username) {
+    await db.run("DELETE FROM messages WHERE username = ?", username);
+    io.emit("delete-all");
+    // Reuse recover method
+    try {
+        await db.each(
+            "SELECT id, content, username, sent_at, domain_name FROM messages WHERE id > ?",
+            [0],
+            (_err, row) => {
+                // decode() is a no-op on plain text; it's only here for
+                // rows stored under the old encode()-before-insert scheme
+                const content = renderMessage(decode(row.content));
+                io.emit(
+                    "chat",
+                    content,
+                    row.id,
+                    { username: row.username, domainName: row.domain_name },
+                    row.sent_at,
+                );
+            },
+        );
+    } catch (e) {
+        console.log(e);
+        // something went wrong
+    }
+}
+fastify.post("/owner-api/deleteAll", async (req, res) => {
+    // const userData = getSessionUserData(req);
+    // if (!userData) {
+    //     return res.code(401).send("You aren't logged in.");
+    // }
+    // if (userData.username !== OWNER_USERNAME) {
+    //     return res.code(401).send("You aren't me.");
+    // }
+    if (!checkIsOwner(req)) {
+        return returnResponse(req, res);
     }
     await db.run("DELETE FROM messages");
     io.emit("delete-all");
     return res.code(200).send("Deleted all messages.");
 });
-fastify.get('/owner-api/get-users', async(req,res)=>{
-    const userData = getSessionUserData(req);
-    if (!userData) {
-        return res.code(401).send("You aren't logged in.");
-    }
-    if (userData.username !== OWNER_USERNAME) {
-        return res.code(401).send("You aren't me.");
+fastify.get("/owner-api/get-users", async (req, res) => {
+    // const userData = getSessionUserData(req);
+    // if (!userData) {
+    //     return res.code(401).send("You aren't logged in.");
+    // }
+    // if (userData.username !== OWNER_USERNAME) {
+    //     return res.code(401).send("You aren't me.");
+    // }
+    if (!checkIsOwner(req)) {
+        return returnResponse(req, res);
     }
     let users = await loadUsers();
-    for(let user in users){
+    for (let user in users) {
         // This is just here to make sure passwords aren't leaked :D
         users[user].password = "nope.";
     }
     // makes sure the owner
     users[OWNER_USERNAME]["owner"] = true;
     res.send(JSON.stringify(users));
-})
-fastify.post("/owner-api/create-test-user",async(req,res)=>{
-    const userData = getSessionUserData(req);
-    if (!userData) {
-        return res.code(401).send("You aren't logged in.");
+});
+fastify.post("/owner-api/create-test-user", async (req, res) => {
+    // const userData = getSessionUserData(req);
+    // if (!userData) {
+    //     return res.code(401).send("You aren't logged in.");
+    // }
+    // if (userData.username !== OWNER_USERNAME) {
+    //     return res.code(401).send("You aren't me.");
+    // }
+    if (!checkIsOwner(req)) {
+        return returnResponse(req, res);
     }
-    if (userData.username !== OWNER_USERNAME) {
-        return res.code(401).send("You aren't me.");
-    }
-    const username = req.params.username;
+    // const username = req.params.username;
     const users = await loadUsers();
-    if (users["_TESTUSER"]){
+    if (users["_TESTUSER"]) {
         delete users["_TESTUSER"];
         saveUsers(users);
-        return res.code(409).send("Test user already exists! Deleted.")
+        return res.code(409).send("Test user already exists! Deleted.");
     }
     // actually im gonna put the password in the ENV- wait i dont have an env
     // doof
     users["_TESTUSER"] = {
-        domainName:"test.example.com",
-        password: await hashPassword(process.env.TESTUSER_PASSWORD) // Kinda stupid, but whatever.
-    }
+        domainName: "test.example.com",
+        password: await hashPassword(process.env.TESTUSER_PASSWORD), // Kinda stupid, but whatever.
+    };
     saveUsers(users);
-    return res.code(200).send("Done!")
-})
-fastify.post("/owner-api/delete-test-user",async(req,res)=>{
-    const userData = getSessionUserData(req);
-    if (!userData) {
-        return res.code(401).send("You aren't logged in.");
-    }
-    if (userData.username !== OWNER_USERNAME) {
-        return res.code(401).send("You aren't me.");
+    return res.code(200).send("Done!");
+});
+fastify.post("/owner-api/delete-test-user", async (req, res) => {
+    // const userData = getSessionUserData(req);
+    // if (!userData) {
+    //     return res.code(401).send("You aren't logged in.");
+    // }
+    // if (userData.username !== OWNER_USERNAME) {
+    //     return res.code(401).send("You aren't me.");
+    // }
+    if (!checkIsOwner(req)) {
+        return returnResponse(req, res);
     }
     const users = await loadUsers();
     delete users["_TESTUSER"];
-    saveUsers(users)
-    return res.code(200).send("I dunno if it never existed before, but it doesn't now!")
-})
+    saveUsers(users);
+    return res
+        .code(200)
+        .send("I dunno if it never existed before, but it doesn't now!");
+});
+fastify.post("/owner-api/delete-user", async (req, res) => {
+    // const userData = getSessionUserData(req);
+    // if (!userData) {
+    //     return res.code(401).send("You aren't logged in.");
+    // }
+    // if (userData.username !== OWNER_USERNAME) {
+    //     return res.code(401).send("You aren't me.");
+    // }
+    if (!checkIsOwner(req)) {
+        return returnResponse(req, res);
+    }
+    
+    // console.log(req.body);
+    if (req.body.username) {
+        const users = await loadUsers();
+        delete users[req.body.username];
+        saveUsers(users);
+        invalidateSessionsFor(req.body.username);
+        return res.code(200).send("done!");
+    } else {
+        return res.code(401).send("No username sent.");
+    }
+});
 //#endregion owner api
 // dompurify by ai i guess- probably not the subtext thing im boutta write
 function renderMessage(rawText) {
     let split = rawText.split("\n");
-    for(let i=0;i<split.length;i++){
+    for (let i = 0; i < split.length; i++) {
         let line = split[i];
-        if(line.startsWith("-#")){
+        if (line.startsWith("-# ")) {
             line = line.slice(3);
-            line = `<span class="subtext">${line}</span>`
+            line = `<span class="subtext">${line}</span>`;
         }
         split[i] = line; // to be safe
     }
-    rawText = split.join("\n") 
+    rawText = split.join("\n");
     return DOMPurify.sanitize(marked.parse(rawText));
 }
 io.on("connection", async (socket) => {
